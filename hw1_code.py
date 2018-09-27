@@ -12,7 +12,7 @@ import math
 def _preprocess_data():
     """
     Reads clean and fake data, processes it using a vectorizer, and combines the 2 datasets.
-    :return: fake data vectorizer, real data vectorizer, combined data
+    :return: data vectorizer, data matrix, label vector
     """
     with open('clean_fake.txt', 'r') as f:
         fake_data = f.readlines()
@@ -32,17 +32,12 @@ def _preprocess_data():
     fake_labels = np.zeros((len(fake_data), 1), dtype=int)
     labels = np.vstack((real_labels, fake_labels))
 
-    #v, k = max((v, k) for k, v in real_data_vectorizer.vocabulary_.items())
-    #print(real_data_vectorizer.vocabulary_)
-    #print(v,k)
-
     labeled_data = np.hstack((data_vectorized.data, labels))
 
     random.shuffle(labeled_data)
 
     data = labeled_data[:, : data_vectorized.shape[1]].copy()
     labels = labeled_data[:, labeled_data.shape[1] - 1 : ].copy().astype(int)
-    print (labeled_data.shape, data.shape, labels.shape)
 
     return data_vectorizer, data, labels
 
@@ -80,12 +75,11 @@ def load_data():
 
 def _classify_data(data, labels, max_depths):
     """
-
-
-    :param data:
-    :param labels:
-    :param max_depths:
-    :return:
+    Classifies data based on data, labels, and max_depth hyperparameter
+    :param data: training matrix X
+    :param labels: training labels y
+    :param max_depths: maximum depths' list for training
+    :return: list of classifiers trained with max_depth hyperparameters and Information Gain & Gini training criterion
     """
     IG_classifications = []
     Gini_classifications = []
@@ -103,10 +97,10 @@ def _classify_data(data, labels, max_depths):
 def _predict(IG_clf, Gini_clf, pred_data):
     """
     Predict values of validation of each model (10 of them)
-    :param classifiers_set1:
-    :param classifiers_set2:
-    :param data:
-    :return:
+    :param IG_clf: list of Information Gain based classifiers
+    :param Gini_clf: list of Gini criterion based classifiers
+    :param pred_data: validation data matrix
+    :return: predictions based on validation matrix and provided classifiers
     """
     IG_predictions = []
     Gini_predictions = []
@@ -121,9 +115,11 @@ def _predict(IG_clf, Gini_clf, pred_data):
 def _calculate_accuracy(IG_predictions, Gini_predictions, validation, max_depths):
     """
     Calculate accuracy using prediction of validation data
-    :param pedictions1:
-    :param predictions2:
-    :return:
+    :param IG_predictions: Information Gain classifiers' predictions
+    :param Gini_predictions: Gini trained classifiers' prediction
+    :param validation: validation label vector
+    :param max_depths: max_depths parameters used for training
+    :return: returns list of accuracies based on provided predictions
     """
     IG_accuracies = []
     Gini_accuracies = []
@@ -165,11 +161,13 @@ def select_model():
 
     check_call(['dot', '-Tpng', 'tree1.dot', '-o', 'tree1.png'])
 
-    # print(list(vectorizer.vocabulary_.keys())[list(vectorizer.vocabulary_.values()).index(5143)])
-
+########################################################################################################################
+# QUESTION 2, PART D
+########################################################################################################################
 
 def compute_information_gain(word):
     """
+    :param word: feature word which is given to calculate Information Gained value
     :return: Information Gain value of the word chosen based on validation data
     """
     vectorizer, (train_x, train_y), (validation_x, validation_y), (test_x, test_y) = load_data()
@@ -217,8 +215,8 @@ def compute_information_gain(word):
 
 
 if __name__ == "__main__":
-    compute_information_gain("trump")
-    compute_information_gain("hillary")
-    compute_information_gain("debate")
-    compute_information_gain("the")
 
+    compute_information_gain("trump")
+    # compute_information_gain("hillary")
+    # compute_information_gain("debate")
+    # compute_information_gain("the")
