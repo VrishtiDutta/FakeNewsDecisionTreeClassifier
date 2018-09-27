@@ -1,11 +1,13 @@
-import sklearn
 import random
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
-from scipy.sparse import hstack, vstack, csr_matrix
 from sklearn import tree
+from subprocess import check_call
+import math
 
-
+########################################################################################################################
+# QUESTION 2, PART A
+########################################################################################################################
 
 def _preprocess_data():
     """
@@ -20,80 +22,85 @@ def _preprocess_data():
         real_data = r.readlines()
         real_data = [x2.strip() for x2 in real_data]
 
-    fake_data_vectorizer = TfidfVectorizer(analyzer='word', input='content')
-    fake_data_vectorized = fake_data_vectorizer.fit_transform(fake_data)
-    print(fake_data_vectorized.shape)
-    
-    real_data_vectorizer = TfidfVectorizer(analyzer='word', input='content')
-    real_data_vectorized = real_data_vectorizer.fit_transform(real_data)
-    print(real_data_vectorized.shape)
+    combined_data = real_data + fake_data
 
-    padding_matrix = csr_matrix((real_data_vectorized.shape[0] - fake_data_vectorized.shape[0], fake_data_vectorized.shape[1]))
-    padded_fake_data = vstack((fake_data_vectorized, padding_matrix))
-    combined_features = hstack([padded_fake_data, real_data_vectorized])
-    print(combined_features.shape)
+    data_vectorizer = TfidfVectorizer(analyzer='word', input='content')
+    data_vectorized = data_vectorizer.fit_transform(combined_data).toarray()
 
-    real_labels = np.ones((real_data_vectorized.shape[1], 1), dtype=int)
-    fake_labels = np.zeros((fake_data_vectorized.shape[1], 1), dtype=int)
+
+    real_labels = np.ones((len(real_data), 1), dtype=int)
+    fake_labels = np.zeros((len(fake_data), 1), dtype=int)
     labels = np.vstack((real_labels, fake_labels))
-    print(labels.shape)
 
     #v, k = max((v, k) for k, v in real_data_vectorizer.vocabulary_.items())
     #print(real_data_vectorizer.vocabulary_)
     #print(v,k)
-    
-    return fake_data_vectorizer, real_data_vectorizer, combined_features, labels
+
+    labeled_data = np.hstack((data_vectorized.data, labels))
+
+    random.shuffle(labeled_data)
+
+    data = labeled_data[:, : data_vectorized.shape[1]].copy()
+    labels = labeled_data[:, labeled_data.shape[1] - 1 : ].copy().astype(int)
+    print (labeled_data.shape, data.shape, labels.shape)
+
+    return data_vectorizer, data, labels
 
 
-def _split_data(features):
+def _split_data(features, labels):
     """
     Splits combined feature matrix into training, validation and test sets by the ratio of 70:15:15 respectively.
-    :type features: csr_matrix
-    :return training matrix, validation matrix, test matrix
+    :param features: data matrix
+    :param labels: label vector
+    :return training, validation, test data matrices and corresponding labels
     """
-    features_mtx = features.data
-    random.shuffle(features_mtx)
-    print(features_mtx.shape)
-    train_data = features.data[:int((len(features.data) + 1) * .70)]  # Splits 70% data to training set
-    validation_data = features.data[int(len(features.data) * .70 + 1):
-                                    int(len(features.data) * .85)]  # Splits 15% data to validation set
-    test_data = features.data[int(len(features.data) * .85 + 1):]  # Splits 15% data to test set
 
-    return train_data, validation_data, test_data
+    (train_x, train_y) = features[:int((len(features.data) + 1) * .70)].copy(), \
+                         labels[:int((len(features.data) + 1) * .70)].copy()
+    (validation_x, validation_y) = features[int(len(features.data) * .70 + 1) : int(len(features.data) * .85)].copy(), \
+                                   labels[int(len(features.data) * .70 + 1): int(len(features.data) * .85)].copy()
+    (test_x, test_y) = features[int(len(features.data) * .85 + 1):].copy(), \
+                       labels[int(len(features.data) * .85 + 1):].copy()
+
+    return (train_x, train_y), (validation_x, validation_y), (test_x, test_y)
 
 
 def load_data():
     """
     Preprocesses data and splits dataset randomly into training, validation, and test sets.
-    :return: fake data vectorizer, real data vectorizer, training matrix, validation matrix, test matrix
+    :return: data vectorizer, training matrix, validation matrix, test matrix with corresponding labels
     """
-    (fake_vectorizer, real_vectorizer, combined_features, labels) = _preprocess_data()
-    (training, validation, test) = _split_data(combined_features)
-    return fake_vectorizer, real_vectorizer, training, validation, test, labels
+    (vectorizer, data, labels) = _preprocess_data()
+    (train_x, train_y), (validation_x, validation_y), (test_x, test_y) = _split_data(data, labels)
+    return vectorizer, (train_x, train_y), (validation_x, validation_y), (test_x, test_y)
 
+########################################################################################################################
+# QUESTION 2, PART B
+########################################################################################################################
 
-def _classify_data(data, labels):
+def _classify_data(data, labels, max_depths):
     """
 
 
     :param data:
     :param labels:
+    :param max_depths:
     :return:
     """
-    # Fit decision tree classifier to x_train, y_train with 2 split criteria and 5 max_depth
     IG_classifications = []
     Gini_classifications = []
-    for i in range(2, 7):
-        Gini_clf = tree.DecisionTreeClassifier(max_depth=i)
-        Gini_classifications.append(Gini_clf.fit(data.toarray(), labels))
 
-        #IG_clf = tree.DecisionTreeClassifier(max_depth=i, criterion="entropy")
-        #IG_classifications.append(IG_clf.fit(data, labels))
+    for i in range(len(max_depths)):
+        Gini_clf = tree.DecisionTreeClassifier(max_depth=max_depths[i], random_state=0)
+        Gini_classifications.append(Gini_clf.fit(data, labels))
+
+        IG_clf = tree.DecisionTreeClassifier(max_depth=max_depths[i], criterion="entropy", random_state=0)
+        IG_classifications.append(IG_clf.fit(data, labels))
 
     return IG_classifications, Gini_classifications
 
 
-def _predict(classifiers_set1, classifiers_set2, data):
+def _predict(IG_clf, Gini_clf, pred_data):
     """
     Predict values of validation of each model (10 of them)
     :param classifiers_set1:
@@ -101,35 +108,117 @@ def _predict(classifiers_set1, classifiers_set2, data):
     :param data:
     :return:
     """
-    predictions1 = []
-    predictions2 = []
+    IG_predictions = []
+    Gini_predictions = []
 
-    for i in range(0, len(classifiers_set1)):
-        predictions1.append(classifiers_set1[i].predict(data))
-        predictions2.append(classifiers_set2[i].predict(data))
+    for i in range(0, len(IG_clf)):
+        IG_predictions.append(IG_clf[i].predict(pred_data))
+        Gini_predictions.append(Gini_clf[i].predict(pred_data))
 
-    return predictions1, predictions2
+    return IG_predictions, Gini_predictions
 
 
-def _calculate_accuracy(predictions1, predictions2):
+def _calculate_accuracy(IG_predictions, Gini_predictions, validation, max_depths):
     """
     Calculate accuracy using prediction of validation data
     :param pedictions1:
     :param predictions2:
     :return:
     """
+    IG_accuracies = []
+    Gini_accuracies = []
+    for i in range(0, len(max_depths)):
 
+        IG_prediction = np.logical_not(np.logical_xor(IG_predictions[i], validation))
+        IG_accuracies.append(IG_prediction[:,0].sum()/IG_predictions[i].shape[0])
+        print("Information Gain accuracy for max_depth " + str(max_depths[i]) + ": " + str(IG_accuracies[i]))
+
+        Gini_prediction = np.logical_not(np.logical_xor(Gini_predictions[i], validation))
+        Gini_accuracies.append(Gini_prediction[:,0].sum() / Gini_predictions[i].shape[0])
+        print("Gini accuracy for max_depth " + str(max_depths[i]) + ": " + str(Gini_accuracies[i]) + "\n")
+
+    return IG_accuracies, Gini_accuracies
 
 def select_model():
     """
     Prints accuracies of all the prediction made using DecisionTreeClassifier models
     """
-    (fake_vectorizer, real_vectorizer, training, validation, test, labels) = load_data()
+    vectorizer, (train_x, train_y), (validation_x, validation_y), (test_x, test_y) = load_data()
 
-    (IG_classifiers, Gini_classifiers) = _classify_data(training, labels)
-    #(IG_predictions, Gini_predictions) = _predict(IG_classifiers, Gini_classifiers, validation)
-    #(IG_accuracy, Gini_accuracy) = _calculate_accuracy(IG_predictions, Gini_predictions)
+    max_depths = [2, 3, 5, 11, 17]
+    (IG_classifiers, Gini_classifiers) = _classify_data(train_x, train_y, max_depths)
+    (IG_predictions, Gini_predictions) = _predict(IG_classifiers, Gini_classifiers, validation_x)
+    (IG_accuracies, Gini_accuracies) = _calculate_accuracy(IG_predictions, Gini_predictions, validation_y, max_depths)
+
+    ####################################################################################################################
+    # QUESTION 2, PART C
+    ####################################################################################################################
+
+    with open("tree1.dot", 'w') as f:
+        f = tree.export_graphviz(IG_classifiers[2],
+                                 out_file=f,
+                                 max_depth=2,
+                                 impurity=False,
+                                 class_names=['fake', 'real'],
+                                 rounded=True,
+                                 filled=True)
+
+    check_call(['dot', '-Tpng', 'tree1.dot', '-o', 'tree1.png'])
+
+    # print(list(vectorizer.vocabulary_.keys())[list(vectorizer.vocabulary_.values()).index(5143)])
+
+
+def compute_information_gain(word):
+    """
+    :return: Information Gain value of the word chosen based on validation data
+    """
+    vectorizer, (train_x, train_y), (validation_x, validation_y), (test_x, test_y) = load_data()
+    total_count = train_y.shape[0]
+    real_count = int(train_y[:].sum())
+    fake_count = int(total_count - real_count)
+
+    entropy_Y = -1*(real_count / total_count)*(math.log2(real_count / total_count)) + \
+                -1*(fake_count / total_count)*(math.log2(fake_count / total_count))
+
+
+    word_idx = vectorizer.vocabulary_[word]
+    word_column = train_x[:,word_idx].reshape(train_y.shape[0],1)
+    word_in_headline = np.count_nonzero(word_column)
+    word_in_real_headline = np.count_nonzero(word_column.transpose().dot(train_y))
+    idx_headlines_without_word = np.where(word_column == 0.0)
+    vec_headlines_without_word = np.zeros(train_y.shape)
+    vec_headlines_without_word[idx_headlines_without_word] = 1
+    real_headlines_without_word = np.count_nonzero(vec_headlines_without_word.transpose().dot(train_y))
+
+
+    p_fake_given_word = (word_in_headline - word_in_real_headline)/word_in_headline
+    p_real_given_word = word_in_real_headline/word_in_headline
+    entropy_Y_given_word_in_headline = -1*p_fake_given_word*math.log2(p_fake_given_word) + \
+                                       -1*p_real_given_word*math.log2(p_real_given_word)
+
+
+    p_fake_given_not_word = (len(idx_headlines_without_word) - real_headlines_without_word) / \
+                                                                                        (total_count - word_in_headline)
+    p_real_given_not_word = real_headlines_without_word/(total_count - word_in_headline)
+    entropy_Y_given_word_not_in_headline = -1*p_fake_given_not_word*math.log2(p_fake_given_not_word) + \
+                                           -1*p_real_given_not_word*math.log2(p_real_given_not_word)
+
+    p_word_in_headline = word_in_headline / total_count
+    p_word_not_in_headline = (total_count - p_word_in_headline) / total_count
+
+    entropy_Y_given_word = p_word_in_headline * entropy_Y_given_word_in_headline + \
+                           p_word_not_in_headline * entropy_Y_given_word_not_in_headline
+
+    information_gain = entropy_Y - entropy_Y_given_word
+
+    print("Information Gain for word \"" + word + "\" is: " + str(information_gain))
+
+    return information_gain
 
 
 if __name__ == "__main__":
-    select_model()
+    compute_information_gain("trump")
+    compute_information_gain("hillary")
+    compute_information_gain("debate")
+    compute_information_gain("the")
+
