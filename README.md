@@ -1,5 +1,5 @@
 # FakeNewsDecisionTreeClassifier
-Decision tree classification of real versus fake news based on Information Gain as shown in output decision tree created using SciKit learn libraries.
+Decision tree classification of real versus fake news based on Information Gain as shown in sample output decision tree created using SciKit learn libraries.
 ![alt text](https://github.com/VrishtiDutta/FakeNewsDecisionTreeClassifier/blob/master/tree1.png "Decision Tree based on keyword Trump")
 
 Note: <br />
