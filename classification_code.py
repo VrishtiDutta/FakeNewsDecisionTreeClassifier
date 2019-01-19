@@ -5,9 +5,6 @@ from sklearn import tree
 from subprocess import check_call
 import math
 
-########################################################################################################################
-# QUESTION 2, PART A
-########################################################################################################################
 
 def _preprocess_data():
     """
@@ -69,9 +66,6 @@ def load_data():
     (train_x, train_y), (validation_x, validation_y), (test_x, test_y) = _split_data(data, labels)
     return vectorizer, (train_x, train_y), (validation_x, validation_y), (test_x, test_y)
 
-########################################################################################################################
-# QUESTION 2, PART B
-########################################################################################################################
 
 def _classify_data(data, labels, max_depths):
     """
@@ -146,10 +140,6 @@ def select_model():
     (IG_predictions, Gini_predictions) = _predict(IG_classifiers, Gini_classifiers, validation_x)
     (IG_accuracies, Gini_accuracies) = _calculate_accuracy(IG_predictions, Gini_predictions, validation_y, max_depths)
 
-    ####################################################################################################################
-    # QUESTION 2, PART C
-    ####################################################################################################################
-
     with open("tree1.dot", 'w') as f:
         f = tree.export_graphviz(IG_classifiers[2],
                                  out_file=f,
@@ -161,9 +151,6 @@ def select_model():
 
     check_call(['dot', '-Tpng', 'tree1.dot', '-o', 'tree1.png'])
 
-########################################################################################################################
-# QUESTION 2, PART D
-########################################################################################################################
 
 def compute_information_gain(word):
     """
